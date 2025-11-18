@@ -1,0 +1,102 @@
+{
+  "F85": {
+    "placas": "ABC-1234",
+    "tipo": "F",
+    "origen": "Ciudad A",
+    "destino": "Ciudad B",
+    "posicion": {"lat": 19.432608, "lon": -99.133209},
+    "eta_minutos": 45,
+    "chofer": "Juan Pérez",
+    "velocidad": 75
+  },
+  "T30": {
+    "placas": "XYZ-5678",
+    "tipo": "T",
+    "origen": "Ciudad C",
+    "destino": "Ciudad D",
+    "posicion": {"lat": 20.659699, "lon": -103.349609},
+    "eta_minutos": 90,
+    "chofer": "María López",
+    "velocidad": 60
+  },
+  "R12": {
+    "placas": "LMN-9101",
+    "tipo": "R",
+    "origen": "Ciudad E",
+    "destino": "Ciudad F",
+    "posicion": {"lat": 21.161908, "lon": -86.851528},
+    "eta_minutos": 120,
+    "chofer": "Carlos Gómez",
+    "velocidad": 55
+  },
+  "F92": {
+    "placas": "DEF-2345",
+    "tipo": "F",
+    "origen": "Ciudad G",
+    "destino": "Ciudad H",
+    "posicion": {"lat": 19.254343, "lon": -103.123456},
+    "eta_minutos": 60,
+    "chofer": "Ana Martínez",
+    "velocidad": 70
+  },
+  "T41": {
+    "placas": "UVW-3456",
+    "tipo": "T",
+    "origen": "Ciudad I",
+    "destino": "Ciudad J",
+    "posicion": {"lat": 18.733301, "lon": -99.133301},
+    "eta_minutos": 80,
+    "chofer": "Luis Ramírez",
+    "velocidad": 65
+  },
+  "R21": {
+    "placas": "OPQ-6789",
+    "tipo": "R",
+    "origen": "Ciudad K",
+    "destino": "Ciudad L",
+    "posicion": {"lat": 22.156456, "lon": -100.985632},
+    "eta_minutos": 150,
+    "chofer": "Sofía Torres",
+    "velocidad": 50
+  },
+  "F77": {
+    "placas": "GHI-4567",
+    "tipo": "F",
+    "origen": "Ciudad M",
+    "destino": "Ciudad N",
+    "posicion": {"lat": 19.891234, "lon": -97.123987},
+    "eta_minutos": 75,
+    "chofer": "Miguel Herrera",
+    "velocidad": 72
+  },
+  "T55": {
+    "placas": "RST-7890",
+    "tipo": "T",
+    "origen": "Ciudad O",
+    "destino": "Ciudad P",
+    "posicion": {"lat": 20.343234, "lon": -102.343234},
+    "eta_minutos": 95,
+    "chofer": "Carolina Díaz",
+    "velocidad": 68
+  },
+  "R33": {
+    "placas": "JKL-5678",
+    "tipo": "R",
+    "origen": "Ciudad Q",
+    "destino": "Ciudad R",
+    "posicion": {"lat": 21.234567, "lon": -104.456789},
+    "eta_minutos": 130,
+    "chofer": "Fernando Ruiz",
+    "velocidad": 58
+  },
+  "F99": {
+    "placas": "MNO-8901",
+    "tipo": "F",
+    "origen": "Ciudad S",
+    "destino": "Ciudad T",
+    "posicion": {"lat": 19.432100, "lon": -98.765432},
+    "eta_minutos": 50,
+    "chofer": "Patricia Vega",
+    "velocidad": 74
+  }
+}
