@@ -3,24 +3,29 @@ import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes
 import os
- 
-# Cargar unidades desde archivo
+
+# Cargar unidades
 with open("unidades.json") as f:
     unidades = json.load(f)
- 
+
 TOKEN = os.getenv("BOT_TOKEN")
- 
+
+print("TOKEN CARGADO:", TOKEN)  # Solo para debug, eliminar después
+
+if not TOKEN:
+    raise Exception("ERROR: BOT_TOKEN no está configurado en Render.")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mensaje = """
 👋 ¡Hola! Bienvenido al bot de rastreo de unidades.
- 
+
 📌 Para consultar una unidad:
 - Haz clic en la unidad que deseas ver
 - Recibirás información completa."""
     keyboard = [[InlineKeyboardButton(u, callback_data=u)] for u in unidades.keys()]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(mensaje, reply_markup=reply_markup)
- 
+
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -38,12 +43,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🌍 Ver mapa: https://maps.google.com/?q={u['posicion']['lat']},{u['posicion']['lon']}
 """
     await query.edit_message_text(text=mensaje)
- 
+
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
     await app.run_polling()
- 
+
 if __name__ == "__main__":
     asyncio.run(main())
