@@ -52,32 +52,22 @@ def cargar_datos():
         UNIDADES = {}
  
 # ---------------------------------------------------------
-# 3. COMANDOS
+# 3. LÓGICA VISUAL (Helpers)
 # ---------------------------------------------------------
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-TOKEN = os.environ.get("BOT_TOKEN")
- 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cargar_datos()
-    if not UNIDADES:
-        await update.message.reply_text("⚠️ Sin datos.")
-        return
- 
-    user = update.effective_user
-    mensaje = f"👋 Hola {user.first_name}. Panel Geotab Telegram.\nSelecciona unidad:"
+def armar_teclado_menu():
+    """Genera los botones del menú principal basado en el estatus actual."""
     keyboard = []
-    
     for nombre, datos in UNIDADES.items():
         vel = datos.get('velocidad', 0)
         en_taller = datos.get('en_taller', False)
         chofer = datos.get('chofer', 'Sin Asignar')
         
-        # LÓGICA AVANZADA DE ICONOS (Basada en tus fotos)
+        # LÓGICA DE ICONOS
         if en_taller:
             icono = "🔧" # Taller
             estado_txt = "Mantenimiento"
         elif vel > 0 and (chofer == "Sin Asignar" or chofer == ""):
-            icono = "👻" # UNIDAD FANTASMA (Se mueve sin chofer)
+            icono = "👻" # Fantasma
             estado_txt = "SIN CHOFER"
         elif vel > LIMITE_VELOCIDAD:
             icono = "🚨" # Exceso
@@ -92,17 +82,44 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         texto = f"{icono} {nombre} ({estado_txt})"
         keyboard.append([InlineKeyboardButton(texto, callback_data=nombre)])
+    
+    return InlineKeyboardMarkup(keyboard)
  
-    await update.message.reply_text(mensaje, reply_markup=InlineKeyboardMarkup(keyboard))
+# ---------------------------------------------------------
+# 4. COMANDOS
+# ---------------------------------------------------------
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+TOKEN = os.environ.get("BOT_TOKEN")
+ 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cargar_datos()
+    if not UNIDADES:
+        await update.message.reply_text("⚠️ Sin datos.")
+        return
+ 
+    user = update.effective_user
+    mensaje = f"👋 Hola {user.first_name}. Panel Geotab Telegram.\nSelecciona unidad:"
+    
+    # Usamos el helper para no duplicar código
+    reply_markup = armar_teclado_menu()
+ 
+    await update.message.reply_text(mensaje, reply_markup=reply_markup)
  
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
     
+    # --- AQUÍ ESTABA EL ERROR ---
     if data == "MENU_PRINCIPAL":
-        await start(update, context)
+        # En lugar de llamar a start(), regeneramos el menú y EDITAMOS el mensaje
+        cargar_datos() # Recargar por si hubo cambios
+        mensaje = "👋 Panel Geotab Telegram.\nSelecciona unidad:"
+        reply_markup = armar_teclado_menu()
+        
+        await query.edit_message_text(text=mensaje, reply_markup=reply_markup)
         return
+    # -----------------------------
  
     if data in UNIDADES:
         u = UNIDADES[data]
@@ -110,8 +127,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Icono de estatus para el detalle
         if u.get('en_taller'):
             status_icon = "🔧 EN TALLER"
-        elif u.get('velocidad') > 0 and u.get('chofer') == "Sin Asignar":
+        elif u.get('velocidad') > 0 and (u.get('chofer') == "Sin Asignar" or u.get('chofer') == ""):
             status_icon = "👻 MOVIMIENTO NO AUTORIZADO (Sin Chofer)"
+        elif u.get('velocidad') > LIMITE_VELOCIDAD:
+             status_icon = "🚨 EXCESO DE VELOCIDAD"
         elif u.get('velocidad') == 0:
             status_icon = f"🔴 DETENIDO (Tiempo: {u.get('tiempo_detenido')})"
         else:
@@ -136,7 +155,6 @@ Estado: *{status_icon}*
         
         await query.edit_message_text(text=mensaje, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botones))
  
-# --- Otros comandos esenciales ---
 async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cargar_datos()
     output = io.StringIO()
@@ -150,18 +168,15 @@ async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_document(document=doc)
  
 async def buscar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # (Misma lógica de búsqueda de antes)
     query = " ".join(context.args).lower()
     if not query: return
     cargar_datos()
     encontradas = [k for k, v in UNIDADES.items() if query in k.lower()]
     if len(encontradas) == 1:
-        # Simulamos el botón
-        # (Aquí podrías llamar a una función auxiliar, por brevedad omito la repetición)
         await update.message.reply_text(f"Unidad encontrada: {encontradas[0]}")
  
 # ---------------------------------------------------------
-# 4. EJECUCIÓN
+# 5. EJECUCIÓN
 # ---------------------------------------------------------
 def main():
     if not TOKEN: return
@@ -175,7 +190,7 @@ def main():
     app.add_handler(CommandHandler("buscar", buscar))
     app.add_handler(CallbackQueryHandler(button_handler))
  
-    print("--- Bot Geotab Pro Iniciado ---")
+    print("--- Bot Geotab Pro Corregido Iniciado ---")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
  
 if __name__ == "__main__":
