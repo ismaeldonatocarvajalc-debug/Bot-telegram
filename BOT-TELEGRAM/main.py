@@ -22,9 +22,8 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200)
         self.end_headers()
-    # Desactivamos logs del servidor web para ahorrar espacio en consola
     def log_message(self, format, *args):
-        return
+        return # Silenciar logs web
 
 def run_dummy_server():
     port = int(os.environ.get("PORT", 10000))
@@ -64,11 +63,11 @@ def parse_tiempo_a_minutos(tiempo_str):
     return total_min
 
 # ---------------------------------------------------------
-# 3. MONITOR AUTOMÁTICO (Optimizado)
+# 3. MONITOR AUTOMÁTICO (Con Alertas Push) 🚨
 # ---------------------------------------------------------
 async def monitor_automatico(context: ContextTypes.DEFAULT_TYPE):
     cargar_datos() 
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M") # Sin segundos para ahorrar ram
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     
     if not UNIDADES: return
 
@@ -90,14 +89,15 @@ async def monitor_automatico(context: ContextTypes.DEFAULT_TYPE):
 
         registro = {
             "t": timestamp, "u": nombre, "v": velocidad, "e": estatus_historial,
-            "ref": u.get('referencia')[:20] # Recortamos texto largo para ahorrar RAM
+            "ref": u.get('referencia')[:20]
         }
         HISTORIAL_RAM.append(registro)
 
-        # ALERTAS PUSH
+        # --- LOGICA DE ALERTAS PUSH ---
         if velocidad == 0 and not en_taller and minutos_detenido > limite:
             ultima_alerta = ALERTAS_ENVIADAS.get(nombre, 0)
             ahora = time.time()
+            # Avisar cada 4 horas
             if (ahora - ultima_alerta) > 14400:
                 mensaje_alerta = f"🚨 *ESTADÍA EXCEDIDA* 🚨\n🚛 {nombre}\n⏱ {tiempo_str} (Max {limite}m)\n📍 {u.get('referencia')}"
                 for chat_id in CHATS_SUSCRITOS:
@@ -108,8 +108,7 @@ async def monitor_automatico(context: ContextTypes.DEFAULT_TYPE):
         else:
             if nombre in ALERTAS_ENVIADAS: del ALERTAS_ENVIADAS[nombre]
                 
-    # --- OPTIMIZACIÓN DE MEMORIA ---
-    # Bajamos de 5000 a 1000 registros máximo para no saturar la RAM gratis
+    # Optimización de memoria (Max 1000 registros)
     if len(HISTORIAL_RAM) > 1000: 
         del HISTORIAL_RAM[:100]
 
@@ -133,7 +132,7 @@ def armar_teclado_menu():
     return InlineKeyboardMarkup(keyboard)
 
 # ---------------------------------------------------------
-# 5. COMANDOS
+# 5. COMANDOS DEL BOT
 # ---------------------------------------------------------
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -141,12 +140,11 @@ TOKEN = os.environ.get("BOT_TOKEN")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cargar_datos()
     user = update.effective_user
-    await update.message.reply_text(f"👋 Hola {user.first_name}.", reply_markup=armar_teclado_menu())
+    await update.message.reply_text(f"👋 Hola {user.first_name}.\n💡 /activar para alertas.", reply_markup=armar_teclado_menu())
 
 async def activar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    CHATS_SUSCRITOS.add(chat_id)
-    await update.message.reply_text("🔔 Alertas ON")
+    CHATS_SUSCRITOS.add(update.effective_chat.id)
+    await update.message.reply_text("🔔 Alertas Activadas")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -158,9 +156,76 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data in UNIDADES:
         u = UNIDADES[data]
-        msg = f"🚛 *{data}*\nRef: `{u.get('referencia')}`\nPlacas: `{u.get('placas')}`\nVel: *{u.get('velocidad')} km/h*\nChofer: {u.get('chofer')}"
+        limite = u.get('limite_estadia', DEFAULT_LIMIT)
+        msg = f"🚛 *{data}*\nRef: `{u.get('referencia')}`\nPlacas: `{u.get('placas')}`\nVel: *{u.get('velocidad')} km/h*\n⏳ Tol: *{limite} min*"
         kb = [[InlineKeyboardButton("🔙 Volver", callback_data="MENU_PRINCIPAL")]]
         await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+# --- COMANDOS AVANZADOS RESTAURADOS ---
+
+async def estadias(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cargar_datos()
+    detenidas = []
+    for n, u in UNIDADES.items():
+        if u.get('velocidad') == 0 and not u.get('en_taller'):
+            mins = parse_tiempo_a_minutos(u.get('tiempo_detenido', '0m'))
+            limite = u.get('limite_estadia', DEFAULT_LIMIT)
+            detenidas.append({'n': n, 'm': mins, 't': u.get('tiempo_detenido'), 'l': limite})
+    
+    detenidas.sort(key=lambda x: x['m'], reverse=True)
+    if not detenidas: return await update.message.reply_text("✅ Cero estadías.")
+    
+    msg = "⏳ **Control Estadías**\n\n"
+    for d in detenidas[:10]:
+        alerta = "⚠️ EXCEDIDO" if d['m'] > d['l'] else "✅ OK"
+        msg += f"{alerta} **{d['n']}**\n   ⏱ {d['t']} (Max {d['l']}m)\n\n"
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+async def reporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cargar_datos()
+    tipo = context.args[0].lower() if context.args else "general"
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    if tipo == "estadias":
+        writer.writerow(['Unidad', 'Tiempo', 'Limite', 'Minutos', 'Norma', 'Ref'])
+        for n, u in UNIDADES.items():
+            if u.get('velocidad') == 0 and not u.get('en_taller'):
+                mins = parse_tiempo_a_minutos(u.get('tiempo_detenido', '0m'))
+                norma = "EXCEDIDO" if mins > u.get('limite_estadia', DEFAULT_LIMIT) else "OK"
+                writer.writerow([n, u.get('tiempo_detenido'), u.get('limite_estadia'), mins, norma, u.get('referencia')])
+        filename = "Estadias.csv"
+    elif tipo == "taller":
+        writer.writerow(['Unidad', 'Ubicación', 'Tiempo', 'Responsable'])
+        for n, u in UNIDADES.items():
+            if u.get('en_taller'): writer.writerow([n, u.get('referencia'), u.get('tiempo_detenido'), u.get('chofer')])
+        filename = "Taller.csv"
+    else:
+        writer.writerow(['Unidad', 'Vel', 'Chofer', 'Ref'])
+        for n, u in UNIDADES.items():
+            writer.writerow([n, u.get('velocidad'), u.get('chofer'), u.get('referencia')])
+        filename = "General.csv"
+            
+    output.seek(0)
+    doc = io.BytesIO(output.getvalue().encode('utf-8'))
+    doc.name = filename
+    await update.message.reply_document(document=doc, caption=f"📊 Reporte: {tipo.upper()}")
+
+async def buscar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args).lower()
+    if not query: return
+    cargar_datos()
+    encontradas = [k for k, v in UNIDADES.items() if query in k.lower() or query in v.get('placas', '').lower()]
+    if not encontradas: await update.message.reply_text("❌ No encontrado.")
+    elif len(encontradas) == 1: await update.message.reply_text(f"✅ {encontradas[0]}")
+    else: await update.message.reply_text(f"🔍 {len(encontradas)} coincidencias.")
+
+async def resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cargar_datos()
+    total = len(UNIDADES)
+    mov = sum(1 for u in UNIDADES.values() if u.get('velocidad', 0) > 0)
+    stop = total - mov
+    await update.message.reply_text(f"📊 *Resumen*\nTotal: {total}\n🟢 Ruta: {mov}\n🔴 Stop: {stop}", parse_mode="Markdown")
 
 async def historial(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not HISTORIAL_RAM: return await update.message.reply_text("⏳ Sin datos...")
@@ -173,9 +238,6 @@ async def historial(update: Update, context: ContextTypes.DEFAULT_TYPE):
     doc = io.BytesIO(output.getvalue().encode('utf-8'))
     doc.name = f"Historial.csv"
     await update.message.reply_document(document=doc)
-
-async def resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"📊 Total Unidades: {len(UNIDADES)}")
 
 # ---------------------------------------------------------
 # 6. EJECUCIÓN
@@ -191,11 +253,14 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("activar", activar))
     app.add_handler(CommandHandler("resumen", resumen))
+    app.add_handler(CommandHandler("reporte", reporte))
+    app.add_handler(CommandHandler("buscar", buscar))
+    app.add_handler(CommandHandler("estadias", estadias))
     app.add_handler(CommandHandler("historial", historial))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("--- Bot Optimizado V2 (Polling Fix) ---")
-    # CORRECCIÓN: Eliminamos los timeouts manuales que causaban error
+    print("--- Bot Definitivo (Todo en Uno) ---")
+    # FIX: Polling limpio sin argumentos extraños
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
