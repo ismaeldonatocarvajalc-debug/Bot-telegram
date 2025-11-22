@@ -12,7 +12,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
 
 # ---------------------------------------------------------
-# 1. INFRAESTRUCTURA (Servidor para engañar a Render)
+# 1. INFRAESTRUCTURA
 # ---------------------------------------------------------
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -23,7 +23,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
     def log_message(self, format, *args):
-        return # Silenciar logs para ahorrar consola
+        return 
 
 def run_dummy_server():
     port = int(os.environ.get("PORT", 10000))
@@ -32,7 +32,7 @@ def run_dummy_server():
     server.serve_forever()
 
 # ---------------------------------------------------------
-# 2. GESTIÓN DE DATOS
+# 2. DATOS
 # ---------------------------------------------------------
 UNIDADES = {}
 HISTORIAL_RAM = [] 
@@ -52,7 +52,6 @@ def cargar_datos():
         UNIDADES = {}
 
 def parse_tiempo_a_minutos(tiempo_str):
-    """Convierte '1d 2h 30m' a minutos enteros"""
     if not tiempo_str: return 0
     total_min = 0
     dias = re.search(r'(\d+)d', tiempo_str)
@@ -65,7 +64,7 @@ def parse_tiempo_a_minutos(tiempo_str):
     return total_min
 
 # ---------------------------------------------------------
-# 3. MONITOR AUTOMÁTICO (Alertas + Historial) 🚨
+# 3. MONITOR AUTOMÁTICO
 # ---------------------------------------------------------
 async def monitor_automatico(context: ContextTypes.DEFAULT_TYPE):
     cargar_datos() 
@@ -81,7 +80,6 @@ async def monitor_automatico(context: ContextTypes.DEFAULT_TYPE):
         minutos_detenido = parse_tiempo_a_minutos(tiempo_str)
         limite = u.get('limite_estadia', DEFAULT_LIMIT)
 
-        # Estatus para Historial
         estatus_historial = "EN RUTA"
         if en_taller: estatus_historial = "TALLER"
         elif velocidad > LIMITE_VELOCIDAD: estatus_historial = f"EXCESO {velocidad}"
@@ -90,21 +88,20 @@ async def monitor_automatico(context: ContextTypes.DEFAULT_TYPE):
             if minutos_detenido > limite: estatus_historial = f"⚠️ EXCEDIDO"
             else: estatus_historial = "DETENIDO"
 
-        # Guardar en RAM (Caja Negra)
         registro = {
             "t": timestamp, "u": nombre, "p": u.get('placas'),
             "v": velocidad, "e": estatus_historial,
-            "ref": u.get('referencia')[:30] # Recortar para ahorrar memoria
+            "ref": u.get('referencia')[:30] 
         }
         HISTORIAL_RAM.append(registro)
 
-        # ALERTAS PUSH
+        # Alertas Push
         if velocidad == 0 and not en_taller and minutos_detenido > limite:
             ultima_alerta = ALERTAS_ENVIADAS.get(nombre, 0)
             ahora = time.time()
-            # Avisar cada 4 horas (14400 seg) para no spamear
             if (ahora - ultima_alerta) > 14400:
-                mensaje = f"🚨 *ESTADÍA EXCEDIDA* 🚨\n🚛 {nombre}\n⏱ {tiempo_str} (Max {limite}m)\n📍 {u.get('referencia')}"
+                # Aquí también agregué el link al mapa en la alerta 🚨🗺️
+                mensaje = f"🚨 *ESTADÍA EXCEDIDA* 🚨\n🚛 {nombre}\n⏱ {tiempo_str} (Max {limite}m)\n📍 {u.get('referencia')}\n[Ver Mapa](https://maps.google.com/?q={u['posicion']['lat']},{u['posicion']['lon']})"
                 for chat_id in CHATS_SUSCRITOS:
                     try:
                         await context.bot.send_message(chat_id=chat_id, text=mensaje, parse_mode="Markdown")
@@ -113,13 +110,11 @@ async def monitor_automatico(context: ContextTypes.DEFAULT_TYPE):
         else:
             if nombre in ALERTAS_ENVIADAS: del ALERTAS_ENVIADAS[nombre]
                 
-    # Limpieza de RAM para que Render no mate el bot
-    # Mantenemos solo los últimos 1500 registros
     if len(HISTORIAL_RAM) > 1500: 
         del HISTORIAL_RAM[:200]
 
 # ---------------------------------------------------------
-# 4. LÓGICA VISUAL
+# 4. VISUALIZACIÓN
 # ---------------------------------------------------------
 def armar_teclado_menu():
     keyboard = []
@@ -138,7 +133,7 @@ def armar_teclado_menu():
     return InlineKeyboardMarkup(keyboard)
 
 # ---------------------------------------------------------
-# 5. COMANDOS (TODOS LOS QUE PEDISTE)
+# 5. COMANDOS
 # ---------------------------------------------------------
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -158,7 +153,7 @@ Selecciona una unidad del menú o utiliza los siguientes comandos:
 
 📊 **Monitoreo en Vivo**
 /estadias - Ver unidades con mayor tiempo detenidas (Top)
-/resumen - Vistazo rápido de la flota (En Ruta vs Stop)
+/resumen - Vistazo rápido de la unidad (En Ruta vs Stop)
 /buscar [placa] - Encontrar una unidad específica
 
 📂 **Reportes y Auditoría**
@@ -169,7 +164,6 @@ Selecciona una unidad del menú o utiliza los siguientes comandos:
 
 👇 **Selecciona una unidad para ver su ubicación y estatus:**
     """
-    
     await update.message.reply_text(mensaje, reply_markup=armar_teclado_menu(), parse_mode="Markdown")
 
 async def activar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -194,7 +188,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif u.get('velocidad') == 0: status = f"🔴 DETENIDO ({u.get('tiempo_detenido')})"
         else: status = "🟢 EN RUTA"
         
-        msg = f"🚛 *{data}*\nEstado: *{status}*\n⏳ Tol: *{limite} min*\n📍 Ref: `{u.get('referencia')}`\n📄 Placas: `{u.get('placas')}`"
+        # --- AQUI AGREGUÉ EL MAPA ---
+        msg = f"""
+🚛 *{data}*
+Estado: *{status}*
+⏳ Tol: *{limite} min*
+📍 Ref: `{u.get('referencia')}`
+📄 Placas: `{u.get('placas')}`
+🚀 Velocidad: *{u.get('velocidad')} km/h*
+👨‍✈️ Chofer: {u.get('chofer')}
+
+📍 [Ver Mapa en Google](https://maps.google.com/?q={u['posicion']['lat']},{u['posicion']['lon']})
+        """
         
         botones = []
         if u.get('telefono'):
@@ -288,15 +293,11 @@ async def historial(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not TOKEN: return
     cargar_datos()
-    
-    # Iniciar Servidor Dummy
     Thread(target=run_dummy_server, daemon=True).start()
     
-    # Iniciar Bot con JobQueue
     app = ApplicationBuilder().token(TOKEN).build()
     app.job_queue.run_repeating(monitor_automatico, interval=60, first=10)
 
-    # Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("activar", activar))
     app.add_handler(CommandHandler("resumen", resumen))
@@ -306,8 +307,7 @@ def main():
     app.add_handler(CommandHandler("historial", historial))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("--- Bot Definitivo Restaurado ---")
-    # FIX: Sin argumentos problemáticos
+    print("--- Bot Definitivo con Mapa ---")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
